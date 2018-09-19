@@ -5,3 +5,9 @@
 /bazel-im2txt
 /bazel-testlogs
 /bazel-tf
+/im2txt/data/mscoco
+*.json
+*.zip
+/model
+*.sh
+*.ckpt
