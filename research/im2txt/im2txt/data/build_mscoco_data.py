@@ -100,15 +100,15 @@ import numpy as np
 from six.moves import xrange
 import tensorflow as tf
 
-tf.flags.DEFINE_string("train_image_dir", "/tmp/train2014/",
+tf.flags.DEFINE_string("train_image_dir", "/tmp/train2017/",
                        "Training image directory.")
-tf.flags.DEFINE_string("val_image_dir", "/tmp/val2014",
-                       "Validation image directory.")
+# tf.flags.DEFINE_string("val_image_dir", "/tmp/val2014",
+#                        "Validation image directory.")
 
-tf.flags.DEFINE_string("train_captions_file", "/tmp/captions_train2014.json",
+tf.flags.DEFINE_string("train_captions_file", "/tmp/paragraphs_v1.json",
                        "Training captions JSON file.")
-tf.flags.DEFINE_string("val_captions_file", "/tmp/captions_val2014.json",
-                       "Validation captions JSON file.")
+# tf.flags.DEFINE_string("val_captions_file", "/tmp/captions_val2014.json",
+#                        "Validation captions JSON file.")
 
 tf.flags.DEFINE_string("output_dir", "/tmp/", "Output data directory.")
 
@@ -137,7 +137,7 @@ tf.flags.DEFINE_integer("num_threads", 8,
 FLAGS = tf.flags.FLAGS
 
 ImageMetadata = namedtuple("ImageMetadata",
-                           ["image_id", "filename", "captions"])
+                           ["image_id", "filename", "captions", "vectors"])
 
 
 class Vocabulary(object):
@@ -189,6 +189,9 @@ def _bytes_feature(value):
   """Wrapper for inserting a bytes Feature into a SequenceExample proto."""
   return tf.train.Feature(bytes_list=tf.train.BytesList(value=[str(value)]))
 
+def _float_feature(value):
+  return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
+
 
 def _int64_feature_list(values):
   """Wrapper for inserting an int64 FeatureList into a SequenceExample proto."""
@@ -198,6 +201,9 @@ def _int64_feature_list(values):
 def _bytes_feature_list(values):
   """Wrapper for inserting a bytes FeatureList into a SequenceExample proto."""
   return tf.train.FeatureList(feature=[_bytes_feature(v) for v in values])
+
+def _float_feature_list(values):
+  return tf.train.FeatureList(feature=[_float_feature(v) for v in values])
 
 
 def _to_sequence_example(image, decoder, vocab):
@@ -211,7 +217,10 @@ def _to_sequence_example(image, decoder, vocab):
   Returns:
     A SequenceExample proto.
   """
-  with tf.gfile.FastGFile(image.filename, "r") as f:
+
+  file_name = "./../../../../zack/exfat/arjun/paragraph_images/paragraph_images" + str(image.filename)
+
+  with tf.gfile.FastGFile(file_name, "r") as f:
     encoded_image = f.read()
 
   try:
@@ -228,9 +237,24 @@ def _to_sequence_example(image, decoder, vocab):
   assert len(image.captions) == 1
   caption = image.captions[0]
   caption_ids = [vocab.word_to_id(word) for word in caption]
+  vector = image.vectors[0]
+  # print("")
+  # print(type(caption))
+  # print(type(caption_ids))
+  # print(type(vector))
+  # num_caption = np.array(caption)
+  # num_captionids = np.array(caption_ids)
+  # num_vector = np.array(vector)
+  # print(num_caption.shape)
+  # print(num_captionids.shape)
+  # print(num_vector.shape)
+  # print(type(caption_ids[0]))
+  # print(type(vector[0]))
+  # print("")
   feature_lists = tf.train.FeatureLists(feature_list={
       "image/caption": _bytes_feature_list(caption),
-      "image/caption_ids": _int64_feature_list(caption_ids)
+      "image/caption_ids": _int64_feature_list(caption_ids),
+      "image/vector": _float_feature_list(vector)
   })
   sequence_example = tf.train.SequenceExample(
       context=context, feature_lists=feature_lists)
@@ -276,6 +300,11 @@ def _process_image_files(thread_index, ranges, name, images, decoder, vocab,
     for i in images_in_shard:
       image = images[i]
 
+      if i == 10:
+        vector = image.vectors[0]
+        numpy_vec = np.array(vector)
+        print("process_image_files: " + str(numpy_vec.shape))
+
       sequence_example = _to_sequence_example(image, decoder, vocab)
       if sequence_example is not None:
         writer.write(sequence_example.SerializeToString())
@@ -307,8 +336,45 @@ def _process_dataset(name, images, vocab, num_shards):
     num_shards: Integer number of shards for the output files.
   """
   # Break up each image into a separate entity for each caption.
-  images = [ImageMetadata(image.image_id, image.filename, [caption])
-            for image in images for caption in image.captions]
+  # images = [ImageMetadata(image.image_id, image.filename, [caption], vector)
+  #           for image in images for caption in image.captions]
+
+  test = images[10]
+  caption = test.captions
+  numpy_caption = np.array(caption)
+  print("captions shape: " + str(numpy_caption.shape))
+  vector = test.vectors
+  numpy_vector = np.array(vector)
+  print("vectors.shape: " + str(numpy_vector.shape))
+
+  images_new = []
+  for image in images:
+    for i in range(len(image.captions)):
+    # for caption in image.captions:
+      images_new.append(ImageMetadata(image.image_id, image.filename, [image.captions[i]], [image.vectors[i]]))
+      # print("len(image.captions[i]): " + str(len(image.captions[i])))
+      # print("len(image.vectors[i]): " + str(len(image.vectors[i])))
+      # print("caption: ")
+      # print(image.captions[i])
+      # print("vector: ")
+      # print(image.vectors[i])
+  
+  # images = [ImageMetadata(image.image_id, image.filename, [caption], vector)
+  #           for image in images for caption in image.captions]    
+
+  images = images_new
+
+  test = images[10]
+  # vector = test.vectors[0]
+  # numpy_vec = np.array(vector)
+  # print("_process_dataset: images[10].vectors[0].shape: " + str(numpy_vec.shape))
+  caption2 = test.captions
+  numpy_cap2 = np.array(caption2)
+  print("_process_dataset: images[10].captions.shape: " + str(numpy_cap2.shape))
+  vector2 = test.vectors
+  numpy_vec2 = np.array(vector2)
+  print("_process_dataset: images[10].vectors.shape: " + str(numpy_vec2.shape))
+
 
   # Shuffle the ordering of images. Make the randomization repeatable.
   random.seed(12345)
@@ -395,7 +461,7 @@ def _process_caption(caption):
   return tokenized_caption
 
 
-def _load_and_process_metadata(captions_file, image_dir):
+def _load_and_process_metadata(captions_file, image_dir, vectors_file):
   """Loads image metadata from a JSON file and processes the captions.
 
   Args:
@@ -409,32 +475,82 @@ def _load_and_process_metadata(captions_file, image_dir):
     caption_data = json.load(f)
 
   # Extract the filenames.
-  id_to_filename = [(x["id"], x["file_name"]) for x in caption_data["images"]]
+  # id_to_filename = [(x["id"], x["file_name"]) for x in caption_data["images"]]
 
-  # Extract the captions. Each image_id is associated with multiple captions.
+  # load vectors
+  lines = [line.rstrip('\n') for line in open(vectors_file)]
+    
+  # convert str of vectors to numpy array of vector
+  vectors = []
+  for i in range(len(lines)):
+    arr = lines[i].split(' ')
+    arr_float = []
+    for i in range(len(arr)):
+      arr_float.append(float(arr[i]))
+    arr_float = np.array(arr_float)
+    vectors.append(arr_float)
+  
+  print("len(vectors): " + str(len(vectors)))
+  
+  # Extract the captions & vectors. Each image_id is associated with multiple captions.
   id_to_captions = {}
-  for annotation in caption_data["annotations"]:
-    image_id = annotation["image_id"]
-    caption = annotation["caption"]
+  id_to_vectors = {}
+  i = 0
+  # for annotation in caption_data["annotations"]:
+  #   image_id = annotation["image_id"]
+  #   caption = annotation["caption"]
+  #   id_to_captions.setdefault(image_id, [])
+  #   id_to_vectors.setdefault(image_id, [])
+  #   id_to_captions[image_id].append(caption)
+  #   id_to_vectors[image_id].append(vectors[i])
+  #   i += 1  
+  for i in range(len(caption_data)):
+    image_id = caption_data[i]["image_id"]
+    caption = caption_data[i]["paragraph"]
+    caption = caption.replace('\n','')
     id_to_captions.setdefault(image_id, [])
+    id_to_vectors.setdefault(image_id, [])
     id_to_captions[image_id].append(caption)
+    id_to_vectors[image_id].append(vectors[i])
 
-  assert len(id_to_filename) == len(id_to_captions)
-  assert set([x[0] for x in id_to_filename]) == set(id_to_captions.keys())
+
+
+  print("i: " + str(i))
+  print("len of id_to_captions: " + str(len(id_to_captions)))
+  print("len of id_to_vectors: " + str(len(id_to_vectors)))
+
+  # assert len(id_to_filename) == len(id_to_captions)
+  # assert set([x[0] for x in id_to_filename]) == set(id_to_captions.keys())
   print("Loaded caption metadata for %d images from %s" %
-        (len(id_to_filename), captions_file))
+        (len(caption_data), captions_file))
 
   # Process the captions and combine the data into a list of ImageMetadata.
   print("Processing captions.")
   image_metadata = []
   num_captions = 0
-  for image_id, base_filename in id_to_filename:
-    filename = os.path.join(image_dir, base_filename)
+  # for image_id, base_filename in id_to_filename:
+  for i in range(len(caption_data)):
+    # filename = os.path.join(image_dir, base_filename)
+    image_id = caption_data[i]["image_id"]
+    filename = str(caption_data[i]["image_id"]) + ".jpg"
     captions = [_process_caption(c) for c in id_to_captions[image_id]]
-    image_metadata.append(ImageMetadata(image_id, filename, captions))
+    vectors = [d.tolist() for d in id_to_vectors[image_id]]
+    # print("")
+    # print(type(captions))
+    # print(type(captions[0]))
+    # print(type(vectors))
+    # print(type(vectors[0]))
+    # cap_numpy = np.array(captions)
+    # vec_numpy = np.array(vectors)
+    # print(cap_numpy.shape)
+    # print(vec_numpy.shape)
+    # print("")
+    # print("len(captions): " + str(len(captions)))
+    # print("len(vectors): " + str(len(vectors)))
+    image_metadata.append(ImageMetadata(image_id, filename, captions, vectors))
     num_captions += len(captions)
   print("Finished processing %d captions for %d images in %s" %
-        (num_captions, len(id_to_filename), captions_file))
+        (num_captions, len(caption_data), captions_file))
 
   return image_metadata
 
@@ -455,20 +571,22 @@ def main(unused_argv):
     tf.gfile.MakeDirs(FLAGS.output_dir)
 
   # Load image metadata from caption files.
-  mscoco_train_dataset = _load_and_process_metadata(FLAGS.train_captions_file,
-                                                    FLAGS.train_image_dir)
-  mscoco_val_dataset = _load_and_process_metadata(FLAGS.val_captions_file,
-                                                  FLAGS.val_image_dir)
+  mscoco_train_dataset = _load_and_process_metadata("paragraphs_v1.json",
+                                                    "./../../../../zack/exfat/arjun/paragraph_images",
+                                                    "paragraphs_train2017_vectors.txt")
+  # mscoco_val_dataset = _load_and_process_metadata(FLAGS.val_captions_file,
+  #                                                 FLAGS.val_image_dir,
+  #                                                 "captions_val2014_vectors.txt")
 
   # Redistribute the MSCOCO data as follows:
   #   train_dataset = 100% of mscoco_train_dataset + 85% of mscoco_val_dataset.
   #   val_dataset = 5% of mscoco_val_dataset (for validation during training).
   #   test_dataset = 10% of mscoco_val_dataset (for final evaluation).
-  train_cutoff = int(0.85 * len(mscoco_val_dataset))
-  val_cutoff = int(0.90 * len(mscoco_val_dataset))
-  train_dataset = mscoco_train_dataset + mscoco_val_dataset[0:train_cutoff]
-  val_dataset = mscoco_val_dataset[train_cutoff:val_cutoff]
-  test_dataset = mscoco_val_dataset[val_cutoff:]
+  train_cutoff = int(0.85 * len(mscoco_train_dataset))
+  val_cutoff = int(0.90 * len(mscoco_train_dataset))
+  train_dataset = mscoco_train_dataset[0:train_cutoff]
+  val_dataset = mscoco_train_dataset[train_cutoff:val_cutoff]
+  test_dataset = mscoco_train_dataset[val_cutoff:]
 
   # Create vocabulary from the training captions.
   train_captions = [c for image in train_dataset for c in image.captions]

@@ -23,8 +23,14 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 import tensorflow as tf
+tf.test.is_gpu_available()
+
+import numpy as np
+import os
 
 from im2txt.ops import image_embedding
 from im2txt.ops import image_processing
@@ -69,6 +75,12 @@ class ShowAndTellModel(object):
     # An int32 Tensor with shape [batch_size, padded_length].
     self.target_seqs = None
 
+    # doc2vec
+    # self.input_vecs = None
+    # self.target_vecs = None
+    # self.mask_vec = None
+    self.vectors = None
+
     # An int32 0/1 Tensor with shape [batch_size, padded_length].
     self.input_mask = None
 
@@ -95,6 +107,16 @@ class ShowAndTellModel(object):
 
     # Global step Tensor.
     self.global_step = None
+
+    # doc2vec
+
+    # print("Path at terminal when executing this file:")
+    # print(os.getcwd() + "\n")
+
+    # print("about to load vecs")
+    # self.vectors = np.loadtxt('./train_corpus_vectors.txt')
+    # print("loaded vecs")
+
 
   def is_training(self):
     """Returns true if the model is built for training mode."""
@@ -155,28 +177,42 @@ class ShowAndTellModel(object):
       # Image processing and random distortion. Split across multiple threads
       # with each thread applying a slightly different distortion.
       assert self.config.num_preprocess_threads % 2 == 0
-      images_and_captions = []
+      images_and_captions_and_vectors = []
+      # images_and_captions = []
+      # vectors = []
       for thread_id in range(self.config.num_preprocess_threads):
         serialized_sequence_example = input_queue.dequeue()
-        encoded_image, caption = input_ops.parse_sequence_example(
+        encoded_image, caption, vector = input_ops.parse_sequence_example(
             serialized_sequence_example,
             image_feature=self.config.image_feature_name,
-            caption_feature=self.config.caption_feature_name)
+            caption_feature=self.config.caption_feature_name,
+            vector_feature="image/vector")
         image = self.process_image(encoded_image, thread_id=thread_id)
-        images_and_captions.append([image, caption])
+        images_and_captions_and_vectors.append([image, caption, vector])
+        # images_and_captions.append([image, caption])      
+        # vectors.append(vector)
+
+      # print("")
+      # print("image_feature_name: " + str(self.config.image_feature_name))
+      # print("caption_feature_name: " + str(self.config.caption_feature_name))
+      # print("")
 
       # Batch inputs.
       queue_capacity = (2 * self.config.num_preprocess_threads *
                         self.config.batch_size)
-      images, input_seqs, target_seqs, input_mask = (
-          input_ops.batch_with_dynamic_pad(images_and_captions,
+      # images, input_seqs, target_seqs, input_mask, input_vecs, target_vecs, mask_vec = input_ops.batch_with_dynamic_pad(images_and_captions_and_vectors,
+      images, input_seqs, target_seqs, input_mask, vectors = input_ops.batch_with_dynamic_pad(images_and_captions_and_vectors,
                                            batch_size=self.config.batch_size,
-                                           queue_capacity=queue_capacity))
+                                           queue_capacity=queue_capacity)
 
     self.images = images
     self.input_seqs = input_seqs
     self.target_seqs = target_seqs
     self.input_mask = input_mask
+    # self.input_vecs = input_vecs
+    # self.target_vecs = target_vecs
+    # self.mask_vec = mask_vec
+    self.vectors = vectors
 
   def build_image_embeddings(self):
     """Builds the image model subgraph and generates image embeddings.
@@ -206,6 +242,10 @@ class ShowAndTellModel(object):
 
     # Save the embedding size in the graph.
     tf.constant(self.config.embedding_size, name="embedding_size")
+
+    # convert dimensions into (512,)
+    image_embeddings = tf.contrib.layers.flatten(image_embeddings)
+    image_embeddings = tf.layers.dense(inputs=image_embeddings, units=512)
 
     self.image_embeddings = image_embeddings
 
@@ -282,6 +322,8 @@ class ShowAndTellModel(object):
       else:
         # Run the batch of sequence embeddings through the LSTM.
         sequence_length = tf.reduce_sum(self.input_mask, 1)
+        print("self.seq_embeddings.shape: " + str((self.seq_embeddings).shape))
+        print("sequence_length: " + str(sequence_length))
         lstm_outputs, _ = tf.nn.dynamic_rnn(cell=lstm_cell,
                                             inputs=self.seq_embeddings,
                                             sequence_length=sequence_length,
@@ -313,10 +355,17 @@ class ShowAndTellModel(object):
                           tf.reduce_sum(weights),
                           name="batch_loss")
       tf.losses.add_loss(batch_loss)
+
+      # L1 loss between CNN vector and doc2vec vector
+      alpha = 0.001
+      l1_loss = tf.losses.absolute_difference(self.vectors, self.image_embeddings)
+      tf.losses.add_loss(alpha*l1_loss)
+
       total_loss = tf.losses.get_total_loss()
 
       # Add summaries.
       tf.summary.scalar("losses/batch_loss", batch_loss)
+      tf.summary.scalar("losses/l1_loss", l1_loss)
       tf.summary.scalar("losses/total_loss", total_loss)
       for var in tf.trainable_variables():
         tf.summary.histogram("parameters/" + var.op.name, var)

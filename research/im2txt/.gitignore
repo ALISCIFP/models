@@ -6,6 +6,8 @@
 /bazel-testlogs
 /bazel-tf
 /im2txt/data/mscoco
+*.out
+*.txt
 *.json
 *.zip
 /model

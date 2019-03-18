@@ -23,7 +23,7 @@ from __future__ import print_function
 import tensorflow as tf
 
 
-def parse_sequence_example(serialized, image_feature, caption_feature):
+def parse_sequence_example(serialized, image_feature, caption_feature, vector_feature):
   """Parses a tensorflow.SequenceExample into an image and caption.
 
   Args:
@@ -44,11 +44,13 @@ def parse_sequence_example(serialized, image_feature, caption_feature):
       },
       sequence_features={
           caption_feature: tf.FixedLenSequenceFeature([], dtype=tf.int64),
+          vector_feature: tf.FixedLenSequenceFeature([], dtype=tf.float32),
       })
 
   encoded_image = context[image_feature]
   caption = sequence[caption_feature]
-  return encoded_image, caption
+  vector = sequence[vector_feature]
+  return encoded_image, caption, vector
 
 
 def prefetch_input_data(reader,
@@ -123,7 +125,8 @@ def prefetch_input_data(reader,
   return values_queue
 
 
-def batch_with_dynamic_pad(images_and_captions,
+def batch_with_dynamic_pad(images_and_captions_and_vectors,
+# def batch_with_dynamic_pad(images_and_captions, 
                            batch_size,
                            queue_capacity,
                            add_summaries=True):
@@ -179,16 +182,26 @@ def batch_with_dynamic_pad(images_and_captions,
     mask: An int32 0/1 Tensor of shape [batch_size, padded_length].
   """
   enqueue_list = []
-  for image, caption in images_and_captions:
+  for image, caption, vector in images_and_captions_and_vectors:
+  # for image, caption in images_and_captions:    
+
     caption_length = tf.shape(caption)[0]
     input_length = tf.expand_dims(tf.subtract(caption_length, 1), 0)
-
     input_seq = tf.slice(caption, [0], input_length)
     target_seq = tf.slice(caption, [1], input_length)
     indicator = tf.ones(input_length, dtype=tf.int32)
-    enqueue_list.append([image, input_seq, target_seq, indicator])
 
-  images, input_seqs, target_seqs, mask = tf.train.batch_join(
+    # vector_length = tf.shape(vector)[0]
+    # input_length = tf.expand_dims(tf.subtract(vector_length, 1), 0)
+    # input_vec = tf.slice(vector, [0], input_length)
+    # target_vec = tf.slice(vector, [0], input_length)
+    # indicator_vec = tf.ones(input_length, dtype=tf.int32)
+
+    # enqueue_list.append([image, input_seq, target_seq, indicator, input_vec, target_vec, indicator_vec])
+    enqueue_list.append([image, input_seq, target_seq, indicator, vector])
+
+  # images, input_seqs, target_seqs, mask, input_vecs, target_vecs, mask_vec  = tf.train.batch_join(
+  images, input_seqs, target_seqs, mask, vector = tf.train.batch_join(   
       enqueue_list,
       batch_size=batch_size,
       capacity=queue_capacity,
@@ -201,4 +214,5 @@ def batch_with_dynamic_pad(images_and_captions,
     tf.summary.scalar("caption_length/batch_max", tf.reduce_max(lengths))
     tf.summary.scalar("caption_length/batch_mean", tf.reduce_mean(lengths))
 
-  return images, input_seqs, target_seqs, mask
+  # return images, input_seqs, target_seqs, mask, input_vecs, target_vecs, mask_vec
+  return images, input_seqs, target_seqs, mask, vector
