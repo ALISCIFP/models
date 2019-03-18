@@ -18,8 +18,13 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
 import tensorflow as tf
+tf.test.is_gpu_available()
+
+# import tensorflow as tf
 
 from im2txt import configuration
 from im2txt import show_and_tell_model

@@ -20,7 +20,8 @@ from __future__ import print_function
 
 import math
 import os
-
+# os.environ["CUDA_VISIBLE_DEVICES"]="0"
+import json
 
 import tensorflow as tf
 
@@ -55,8 +56,10 @@ def main(_):
   vocab = vocabulary.Vocabulary(FLAGS.vocab_file)
 
   filenames = []
-  for file_pattern in FLAGS.input_files.split(","):
-    filenames.extend(tf.gfile.Glob(file_pattern))
+  # for file_pattern in FLAGS.input_files.split(","):
+  for filename in os.listdir(FLAGS.input_files):
+    filenames.append(FLAGS.input_files + str(filename))
+    # filenames.extend(tf.gfile.Glob(file_pattern))
   tf.logging.info("Running caption generation on %d files matching %s",
                   len(filenames), FLAGS.input_files)
 
@@ -69,16 +72,49 @@ def main(_):
     # available beam search parameters.
     generator = caption_generator.CaptionGenerator(model, vocab)
 
-    for filename in filenames:
-      with tf.gfile.GFile(filename, "rb") as f:
-        image = f.read()
-      captions = generator.beam_search(sess, image)
-      print("Captions for image %s:" % os.path.basename(filename))
-      for i, caption in enumerate(captions):
-        # Ignore begin and end words.
-        sentence = [vocab.id_to_word(w) for w in caption.sentence[1:-1]]
+    print("")
+    print(os.getcwd())
+    print("")
+
+    json_file = './../../../../zack/exfat/arjun/mscoco/raw-data/annotations/captions_val2014.json'
+    with open(json_file, 'r') as f:
+      data = json.load(f)
+
+      num = 0
+      for filename in filenames:
+
+        if (num%100) == 0:
+          print("Finished processing " + str(num) + " out of " + str(len(filenames)))
+
+        with tf.gfile.GFile(filename, "rb") as f:
+          image = f.read()
+        captions = generator.beam_search(sess, image)
+        # print("Captions for image %s:" % os.path.basename(filename))
+
+        filename_str = str(os.path.basename(filename))
+        image_id = int(filename_str[13:-4])
+
+        sentence = [vocab.id_to_word(w) for w in (captions[0]).sentence[1:-1]]
         sentence = " ".join(sentence)
-        print("  %d) %s (p=%f)" % (i, sentence, math.exp(caption.logprob)))
+
+        count = 0
+        for annotation in data["annotations"]:
+          if annotation["image_id"] == image_id:
+            data["annotations"][count]["caption"] = sentence
+            break
+          count += 1
+
+        for i, caption in enumerate(captions):
+          # Ignore begin and end words.
+          sentence = [vocab.id_to_word(w) for w in caption.sentence[1:-1]]
+          sentence = " ".join(sentence)
+          # print("  %d) %s (p=%f)" % (i, sentence, math.exp(caption.logprob)))
+ 
+        num += 1
+
+  filename_results = './../../../../zack/exfat/arjun/mscoco/raw-data/annotations/captions_val2014_3m_results.json'
+  with open(filename_results, 'w') as f:
+    json.dump(data, f, indent=4)   
 
 
 if __name__ == "__main__":
