@@ -24,7 +24,7 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
 
 import tensorflow as tf
 tf.test.is_gpu_available()
@@ -450,7 +450,7 @@ class ShowAndTellModel(object):
       tf.losses.add_loss(batch_loss)
 
       # L1 loss between CNN vector and doc2vec vector
-      alpha = 0.01
+      alpha = 0.1
       l1_loss = tf.losses.absolute_difference(self.vectors, self.semantic_features)
       tf.losses.add_loss(alpha*l1_loss)
 
