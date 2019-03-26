@@ -1,0 +1,27 @@
+#!/bin/bash 
+#PBS -l nodes=nano5:ppn=1:gpus=1,walltime=96:00:00
+#PBS -N paragraph
+#PBS -o log_para.txt
+#PBS -e err_para.txt 
+
+cd $PBS_O_WORKDIR
+source activate py27tf113
+MSCOCO_DIR="/home/arjung2/paragraphs_data"
+INCEPTION_CHECKPOINT="/home/arjung2/models_paragraphs_novec/research/im2txt/im2txt/data/inception_v3.ckpt"
+MODEL_DIR="/home/arjung2/models_paragraphs_novec/research/im2txt/im2txt/model"
+
+bazel build -c opt //im2txt/...
+
+# nohup bazel-bin/im2txt/train \
+#   --input_file_pattern="${MSCOCO_DIR}/train-?????-of-00256" \
+#   --inception_checkpoint_file="${INCEPTION_CHECKPOINT}" \
+#   --train_dir="${MODEL_DIR}/train" \
+#   --train_inception=false \
+#   --number_of_steps=1000000
+
+nohup bazel-bin/im2txt/train \
+  --input_file_pattern="${MSCOCO_DIR}/train-?????-of-00256" \
+  --train_dir="${MODEL_DIR}/train" \
+  --train_inception=true \
+  --number_of_steps=3000000
+

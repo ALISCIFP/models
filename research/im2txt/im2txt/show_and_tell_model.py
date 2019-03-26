@@ -24,7 +24,7 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
 import tensorflow as tf
 tf.test.is_gpu_available()
@@ -244,8 +244,8 @@ class ShowAndTellModel(object):
     tf.constant(self.config.embedding_size, name="embedding_size")
 
     # convert dimensions into (512,)
-    image_embeddings = tf.contrib.layers.flatten(image_embeddings)
-    image_embeddings = tf.layers.dense(inputs=image_embeddings, units=512)
+    # image_embeddings = tf.contrib.layers.flatten(image_embeddings)
+    # image_embeddings = tf.layers.dense(inputs=image_embeddings, units=512)
 
     self.image_embeddings = image_embeddings
 
@@ -357,15 +357,15 @@ class ShowAndTellModel(object):
       tf.losses.add_loss(batch_loss)
 
       # L1 loss between CNN vector and doc2vec vector
-      alpha = 0.001
-      l1_loss = tf.losses.absolute_difference(self.vectors, self.image_embeddings)
-      tf.losses.add_loss(alpha*l1_loss)
+      # alpha = 0.001
+      # l1_loss = tf.losses.absolute_difference(self.vectors, self.image_embeddings)
+      # tf.losses.add_loss(alpha*l1_loss)
 
       total_loss = tf.losses.get_total_loss()
 
       # Add summaries.
       tf.summary.scalar("losses/batch_loss", batch_loss)
-      tf.summary.scalar("losses/l1_loss", l1_loss)
+      # tf.summary.scalar("losses/l1_loss", l1_loss)
       tf.summary.scalar("losses/total_loss", total_loss)
       for var in tf.trainable_variables():
         tf.summary.histogram("parameters/" + var.op.name, var)
